@@ -1,13 +1,18 @@
 #define USE_GET_MILLISECOND_TIMER
+#define FASTLED_INTERRUPT_RETRY_COUNT 1
+
 #include <FastLED.h>
 #include <painlessMesh.h>
 
 #define BRIGHTNESS         30
-#define NUM_LEDS    56 //32 on skate
-#define FRAMES_PER_SECOND  256
+#define NUM_LEDS    30 //32 on skate
+#define FRAMES_PER_SECOND  60
+#define USING_SPEED_DATA false
 FASTLED_USING_NAMESPACE
 CRGB leds[NUM_LEDS];
 painlessMesh  mesh;
+String ssid = "WrongoWrongo";
+String password = "Stratovo";
 
 #ifdef ARDUINO_ARCH_ESP32
 #define DATA_PIN    13 //13 for lolin32
@@ -63,88 +68,34 @@ long byteArrayInt4(byte value1, byte value2, byte value3, byte value4) {
   return (((((long) ((value1 & 255) << 16))) | ((long) ((value2 & 255) << 24))) | ((long) (value3 & 255))) | ((long) ((value4 & 255) << 8));
 }
 
-#ifdef ARDUINO_ARCH_ESP32
-static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,uint8_t* pData,size_t length,bool isNotify) {
-  uint32_t now = get_millisecond_timer();
-  if (length >= 20) {
-    if (pData[0] != 170 || (pData[1] != 85)) return; //check header
-    if (pData[16] == 169) { //regular data
-      int16_t dspeeddt = (wheelDat.speed - wheelDat.lastspeed) * 1000 / (now - wheelDat.time);
-      wheelDat.dspeedfilt -= 0.2 * (wheelDat.dspeedfilt - (dspeeddt));
-      wheelDat.lastspeed = wheelDat.speed;
-      wheelDat.voltage = byteArrayInt2(pData[2], pData[3]);
-      wheelDat.speed = byteArrayInt2(pData[4], pData[5]);
-      wheelDat.speedfilt -= 0.25 * (wheelDat.speedfilt - (wheelDat.speed));
-      wheelDat.totalDist = byteArrayInt4(pData[6], pData[7], pData[8], pData[9]);
-      wheelDat.current = ((pData[10]&0xFF) + (pData[11]<<8));
-      wheelDat.temp = byteArrayInt2(pData[12], pData[13]);
-      wheelDat.time = now;
-      Serial.println("real data " + wheelDat.toString());
-    } else if (pData[16] == 187) { //name report
-      //TODO send serial request?
-      Serial.print("GOT NAME");
-      Serial.print("notify data: ");
-      for(int i = 0; i < length; i++)
-        Serial.print(pData[i], HEX);
-      Serial.println();
-    } else {
-      // Serial.print("notify data: ");
-      // for(int i = 0; i < length; i++)
-      //   Serial.print(pData[i], HEX);
-      // Serial.println();
-    }
+uint8_t fadeit(int16_t in, int16_t minv, int16_t maxv) { //returns map between 0-255
+  return ::map(constrain(in, minv, maxv), minv, maxv, 0, 255);
+}
+
+void juggle(uint8_t hue, uint8_t brightness) {
+  // eight colored dots, weaving in and out of sync with each other
+  // fadeToBlackBy( leds, NUM_LEDS, 40);
+  byte dothue = 0;
+  for( int i = 0; i < 10; i++) {
+    leds[beatsin16( 3*i/2 + 2, 0, NUM_LEDS-1 )] |= CHSV(dothue + hue, 220, brightness);
+    dothue += 6;
   }
 }
 
-bool connect(BLEClient* dev) {
-  if (!dev) return false;
-  Serial.println("* Connecting to: " + str(myaddr.toString()));
-  bool res = myDevice->connect(myaddr);
-  Serial.println("* Connected to server" + str(res));
-  if (!res) return false;
-
-  BLERemoteService* serv = dev->getService(serviceUUID);
-  Serial.println("* Service to " + str(serv->toString()) + str(!!serv));
-  if (!serv) { dev->disconnect(); return false; }
-
-  pRemChar = serv->getCharacteristic(charUUID);
-  Serial.println("* Characteristic to " + str(charUUID.toString()) + str(!!pRemChar));
-  if (!pRemChar) { dev->disconnect(); return false; }
-
-  if (!pRemChar->canNotify())
-    Serial.println("* Can't register to be notified!?");
-  pRemChar->registerForNotify(notifyCallback);
-
-  uint8_t askname[20] = {170, 85, 0,0,0,0,0,0,0,0,0,0,0,0,0,0, 155, 20, 90, 90};
-  pRemChar->writeValue(askname, sizeof(askname));
-  return true;
+void confetti(uint8_t hue, uint8_t brightness) {
+  // random colored speckles that blink in and fade smoothly
+  //fadeToBlackBy( leds, NUM_LEDS, 10);
+  int pos = random16(NUM_LEDS);
+  leds[pos] += CHSV(hue + random8(64), 200, brightness);
 }
-
-void connectTask(void* params) {
-  while (true) {
-    if (myDevice && ! myDevice->isConnected()) {
-      Serial.println("connecting device from task");
-      bool res = connect(myDevice);
-      Serial.println("reconnected: " + str(res));
-    }
-    vTaskDelay(5000);
-  }
-}
-#endif
 
 void setup() {
   Serial.begin(115200);
   FastLED.addLeds<WS2811,DATA_PIN,GRB>(leds, NUM_LEDS).setCorrection(TypicalLEDStrip);
   FastLED.setBrightness(BRIGHTNESS);
 
-#ifdef ARDUINO_ARCH_ESP32
-  Serial.println("Starting Arduino BLE Client application...");
-  BLEDevice::init("");
-  myDevice = BLEDevice::createClient();
-  xTaskCreate(connectTask, "connectTask", 10000, NULL, 1, NULL); //fn, name, stack size, parameter, priority, handle
-#endif
   mesh.setDebugMsgTypes(ERROR | STARTUP);
-  mesh.init("helmetleds", "weallloveleds", 1337);
+  mesh.init(ssid, password, 1337);
   mesh.onReceive([](uint32_t from, const String &msg) {
     Serial.printf("SYSTEM: Received from %u msg=%s\n", from, msg.c_str());
   });
@@ -201,9 +152,13 @@ void loop() {
   mesh.update();
   uint32_t now = get_millisecond_timer();
   fps++;
-  EVERY_N_MILLISECONDS(350) { newVoxThresh = mapc(wheelDat.speedfilt, 0, QUICKSPEED, 4, 2*MAX_VOXEL/3); }
-  EVERY_N_MILLISECONDS(1000) { Serial.printf("  (%d fps, thresh %d)\n", fps, newVoxThresh); fps = 0; }
+  uint8_t bright = fadeit(quadwave8((now >> 6) + 50), 65, 191);
 
+  // EVERY_N_MILLISECONDS(350) { newVoxThresh = mapc(wheelDat.speedfilt, 0, QUICKSPEED, 4, 2*MAX_VOXEL/3); }
+  EVERY_N_MILLISECONDS(1000) { Serial.printf("  (%d fps, bright %d)\n", fps, bright); fps = 0; }
+
+  // None of this is getting used because we're not receiving serial data constantly.  Only shows racing LEDs anyway
+  /*
   while (Serial.available()) {
     int v = Serial.parseInt() * 100;
     while (Serial.available() > 0)
@@ -213,12 +168,12 @@ void loop() {
     wheelDat.time = now;
   }
 
-
+  
   if ((now - wheelDat.time) < 4000) { //valid data!
     fadeToBlackBy(leds, NUM_LEDS, 40);
     uint8_t bright = fadeit(wheelDat.speedfilt, 100, 800); //1-8kph
     if (bright < 253) { //when going slow do this pattern
-      juggle(quadwave8(now >> 6) / 6 + 165, 255 - bright); //color specific
+      //juggle(quadwave8(now >> 6) / 6 + 165, 255 - bright); //color specific
     }
     if (bright > 0) {
 
@@ -257,31 +212,13 @@ void loop() {
     juggle(now >> 8, bright);
     confetti((now >> 8) + 20, 255 - bright);
   }
-
+  */
+  fadeToBlackBy( leds, NUM_LEDS, 18);
+  juggle(now >> 8, bright);
+  confetti((now >> 8) + 20, 255 - bright);
 
   FastLED.show();
   FastLED.delay(1000/FRAMES_PER_SECOND);
   // EVERY_N_SECONDS( 5 ) { }
 }
 
-
-void juggle(uint8_t hue, uint8_t brightness) {
-  // eight colored dots, weaving in and out of sync with each other
-  // fadeToBlackBy( leds, NUM_LEDS, 40);
-  byte dothue = 0;
-  for( int i = 0; i < 10; i++) {
-    leds[beatsin16( 3*i/2 + 2, 0, NUM_LEDS-1 )] |= CHSV(dothue + hue, 220, brightness);
-    dothue += 6;
-  }
-}
-
-void confetti(uint8_t hue, uint8_t brightness) {
-  // random colored speckles that blink in and fade smoothly
-  //fadeToBlackBy( leds, NUM_LEDS, 10);
-  int pos = random16(NUM_LEDS);
-  leds[pos] += CHSV(hue + random8(64), 200, brightness);
-}
-
-uint8_t fadeit(int16_t in, int16_t minv, int16_t maxv) { //returns map between 0-255
-  return ::map(constrain(in, minv, maxv), minv, maxv, 0, 255);
-}
