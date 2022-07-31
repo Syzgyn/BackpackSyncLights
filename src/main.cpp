@@ -4,7 +4,7 @@
 #include <FastLED.h>
 #include <painlessMesh.h>
 
-// #define DEBUG_PATTERN 1
+#define DEBUG_PATTERN 5
 
 #define BRIGHTNESS          30
 #define NUM_LEDS            20 //32 on skate
@@ -56,18 +56,6 @@ void rainbow(CRGB *array)
   uint8_t initialHue = (now >> 5);
   uint8_t deltaHue = 7;
 
-  // CHSV hsv;
-  // hsv.hue = initialHue;
-  // hsv.val = fade;
-  // hsv.sat = 240;
-
-  // CRGB rgb;
-  //   for( int i = 0; i < NUM_LEDS; ++i) {
-  //       hsv2rgb_rainbow(hsv, rgb);
-  //       array[i] += rgb;
-  //       hsv.hue += deltaHue;
-  //   }
-
   fill_rainbow( array, NUM_LEDS, initialHue, deltaHue);
 }
 
@@ -87,7 +75,6 @@ void rainbowWithGlitter(CRGB *array)
 
 // random colored speckles that blink in and fade smoothly
 void confetti(CRGB *array) {
-  //fadeToBlackBy( leds, NUM_LEDS, 10);
   uint8_t hue = (now >> 8) + 20;
 
   int pos = random16(NUM_LEDS);
@@ -98,7 +85,6 @@ void confetti(CRGB *array) {
 void sinelon(CRGB *array)
 {
   uint8_t hue = (now >> 8) + 20;
-  // fadeToBlackBy( leds, NUM_LEDS, 20);
   int pos = beatsin16(13,0,NUM_LEDS - 1);
   array[pos] += CHSV( hue, 255, 192);
 }
@@ -107,11 +93,11 @@ void sinelon(CRGB *array)
 void bpm(CRGB *array)
 {
   uint8_t hue = (now >> 8) + 20;
-  uint8_t BeatsPerMinute = 40;
+  uint8_t BeatsPerMinute = 20;
   CRGBPalette16 palette = PartyColors_p;
   uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
   for( int i = 0; i < NUM_LEDS; i++) {
-    array[i] = ColorFromPalette(palette, hue+(i*2), beat);//-hue+(i*10));
+    array[i] = ColorFromPalette(palette, hue+(i*2), beat-hue+(i*10));
   }
 }
 
@@ -144,8 +130,6 @@ int mapc(int v, int a, int b, int c, int d) { return constrain(::map(v, a, b, c,
 
 uint16_t fps = 0;
 
-//TODO: Cleanup loop(), implement crossfading
-//https://github.com/jasoncoon/esp8266-fastled-webserver/issues/192
 void loop() {
   //Update mesh and time
   mesh.update();
@@ -176,9 +160,7 @@ void loop() {
   if (isCrossfading) {
     currentFade = qadd8(currentFade, 1);
 
-    patterns[pattern](ledsB);//, currentFade);
-
-    // Serial.println(fadeit(quadwave8((now >> 6) + 50), 65, 191));
+    patterns[pattern](ledsB);
   }
 
   // At the end of the crossfade, update to the new pattern
@@ -194,25 +176,13 @@ void loop() {
   }
 
   // Run the current pattern always
-  patterns[currentPattern](ledsA);//, 255 - currentFade);
-
-  // uint8_t fade = fadeit(quadwave8((now >> 6) + 50), 65, 191);
-
-  // uint8_t ratio = beatsin8(5);
+  patterns[currentPattern](ledsA);
+  
   // mix the 2 arrays together
   for (int i = 0; i < NUM_LEDS; i++) {
     leds[i] = blend(ledsA[i], ledsB[i], currentFade);
   }
-
-  // Serial.println(currentFade);
-
-
-  // patterns[2](255 - fade);
-  // patterns[4](fade);
-  // // juggle(fade);
-  // // confetti(255 - fade);
  
   FastLED.show();
   FastLED.delay(1000/FRAMES_PER_SECOND);
-  // EVERY_N_SECONDS( 5 ) { }
 }
