@@ -3,14 +3,14 @@
 
 #include <FastLED.h>
 #include <painlessMesh.h>
+#include "patterns.h"
+#include "globalVars.h"
 
-#define DEBUG_PATTERN 5
+#define DEBUG_PATTERN 6
 
 #define BRIGHTNESS          30
-#define NUM_LEDS            20 //32 on skate
 #define FRAMES_PER_SECOND   60
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
-FASTLED_USING_NAMESPACE
 
 // Three array solution from Stefan Petrick (https://gist.github.com/StefanPetrick/0c0d54d0f35ea9cca983)
 CRGB leds[NUM_LEDS];  // Output
@@ -27,81 +27,16 @@ int32_t timeOffset = 0;
 
 uint32_t get_millisecond_timer() { return millis() + timeOffset; }
 
-uint8_t fadeit(int16_t in, int16_t minv, int16_t maxv) { //returns map between 0-255
-  return ::map(constrain(in, minv, maxv), minv, maxv, 0, 255);
-}
+uint32_t now = get_millisecond_timer();
 
 //Pattern related variables
 uint8_t currentPattern = 0;
 bool isCrossfading = false;
 uint8_t currentFade = 0;
-uint32_t now = get_millisecond_timer();
-uint8_t bright = fadeit(quadwave8((now >> 6) + 50), 65, 191);
 
-void juggle(CRGB *array) {
-  // eight colored dots, weaving in and out of sync with each other
-  // fadeToBlackBy( leds, NUM_LEDS, 40);
-  uint8_t hue = now >> 8;
+uint16_t fps = 0;
 
-  byte dothue = 0;
-  for( int i = 0; i < 10; i++) {
-    array[beatsin16( 3*i/2 + 2, 0, NUM_LEDS-1 )] |= CHSV(dothue + hue, 220, 255);
-    dothue += 6;
-  }
-}
-
-// FastLED's built-in rainbow generator
-void rainbow(CRGB *array) 
-{
-  uint8_t initialHue = (now >> 5);
-  uint8_t deltaHue = 7;
-
-  fill_rainbow( array, NUM_LEDS, initialHue, deltaHue);
-}
-
-void addGlitter(CRGB *array, fract8 chanceOfGlitter) 
-{
-  if( random8() < chanceOfGlitter) {
-    array[ random16(NUM_LEDS) ] += CRGB::White;
-  }
-}
-
-// built-in FastLED rainbow, plus some random sparkly glitter
-void rainbowWithGlitter(CRGB *array) 
-{
-  rainbow(array);
-  addGlitter(array, 80);
-}
-
-// random colored speckles that blink in and fade smoothly
-void confetti(CRGB *array) {
-  uint8_t hue = (now >> 8) + 20;
-
-  int pos = random16(NUM_LEDS);
-  array[pos] += CHSV(hue + random8(64), 200, 255);
-}
-
-// a colored dot sweeping back and forth, with fading trails
-void sinelon(CRGB *array)
-{
-  uint8_t hue = (now >> 8) + 20;
-  int pos = beatsin16(13,0,NUM_LEDS - 1);
-  array[pos] += CHSV( hue, 255, 192);
-}
-
-// colored stripes pulsing at a defined Beats-Per-Minute (BPM)
-void bpm(CRGB *array)
-{
-  uint8_t hue = (now >> 8) + 20;
-  uint8_t BeatsPerMinute = 20;
-  CRGBPalette16 palette = PartyColors_p;
-  uint8_t beat = beatsin8( BeatsPerMinute, 64, 255);
-  for( int i = 0; i < NUM_LEDS; i++) {
-    array[i] = ColorFromPalette(palette, hue+(i*2), beat-hue+(i*10));
-  }
-}
-
-typedef void (*SimplePatternList[])(CRGB *leds);
+typedef void (*SimplePatternList[])(CRGB *leds, uint32_t now);
 SimplePatternList patterns = { rainbow, confetti, sinelon, rainbowWithGlitter, juggle, bpm };
 
 void setup() {
@@ -126,10 +61,6 @@ void setup() {
   });
 }
 
-int mapc(int v, int a, int b, int c, int d) { return constrain(::map(v, a, b, c, d), c, d); }
-
-uint16_t fps = 0;
-
 void loop() {
   //Update mesh and time
   mesh.update();
@@ -145,13 +76,13 @@ void loop() {
   fadeToBlackBy( ledsA, NUM_LEDS, 18);
   fadeToBlackBy( ledsB, NUM_LEDS, 18);
 
-  // For debugging
+  // For debugging a single pattern
   #ifdef DEBUG_PATTERN
     pattern = DEBUG_PATTERN;
     currentPattern = DEBUG_PATTERN;
   #endif
 
-  // This should trigger once when the pattern first starts to change
+  // Trigger once when the pattern first starts to change
   if (pattern != currentPattern && !isCrossfading) {
     isCrossfading = true;
   }
@@ -160,7 +91,7 @@ void loop() {
   if (isCrossfading) {
     currentFade = qadd8(currentFade, 1);
 
-    patterns[pattern](ledsB);
+    patterns[pattern](ledsB, now);
   }
 
   // At the end of the crossfade, update to the new pattern
@@ -176,7 +107,7 @@ void loop() {
   }
 
   // Run the current pattern always
-  patterns[currentPattern](ledsA);
+  patterns[currentPattern](ledsA, now);
   
   // mix the 2 arrays together
   for (int i = 0; i < NUM_LEDS; i++) {
