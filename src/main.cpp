@@ -6,7 +6,7 @@
 #include "patterns.h"
 #include "globalVars.h"
 
-#define DEBUG_PATTERN 6
+// #define DEBUG_PATTERN 6
 
 #define BRIGHTNESS          30
 #define FRAMES_PER_SECOND   60
