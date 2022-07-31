@@ -82,4 +82,4 @@ void plasma(CRGB *array, uint32_t now) {
     array[k] = ColorFromPalette(OceanColors_p, colorIndex, thisBright, LINEARBLEND);  // Let's now add the foreground colour.
   }
 
-} // plasma()
+}

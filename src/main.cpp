@@ -67,7 +67,7 @@ void loop() {
   now = get_millisecond_timer();
 
   //Update pattern timer
-  uint8_t pattern = (now >> 14) % ARRAY_SIZE(patterns); // >> 11 = every 2 seconds, >> 16 = every 64 seconds
+  uint8_t pattern = (now >> 17) % ARRAY_SIZE(patterns); // >> 11 = every 2 seconds, >> 16 = every 64 seconds
 
   fps++;
   EVERY_N_MILLISECONDS(1000) { Serial.printf("  (%d fps, pattern %d, currentPattern %d)\n", fps, pattern, currentPattern); fps = 0;}
