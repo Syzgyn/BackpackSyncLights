@@ -6,10 +6,10 @@
 #include "patterns.h"
 #include "globalVars.h"
 
-// #define DEBUG_PATTERN 6
+// #define DEBUG_PATTERN 1
 
-#define BRIGHTNESS          30
-#define FRAMES_PER_SECOND   60
+#define BRIGHTNESS          100
+#define FRAMES_PER_SECOND   400
 #define ARRAY_SIZE(A) (sizeof(A) / sizeof((A)[0]))
 
 // Three array solution from Stefan Petrick (https://gist.github.com/StefanPetrick/0c0d54d0f35ea9cca983)
@@ -18,7 +18,7 @@ CRGB ledsA[NUM_LEDS]; // Source A
 CRGB ledsB[NUM_LEDS]; // Source B
 
 painlessMesh  mesh;
-String ssid = "WrongoWrongo";
+String ssid = "Stratovo";
 String password = "Stratovo";
 
 #define DATA_PIN    2 //gpio2=D4 for D1 mini
@@ -37,7 +37,7 @@ uint8_t currentFade = 0;
 uint16_t fps = 0;
 
 typedef void (*SimplePatternList[])(CRGB *leds, uint32_t now);
-SimplePatternList patterns = { rainbow, confetti, sinelon, rainbowWithGlitter, juggle, bpm };
+SimplePatternList patterns = { lava, rainbow, waves,  bpm };
 
 void setup() {
   Serial.begin(115200);
@@ -67,7 +67,7 @@ void loop() {
   now = get_millisecond_timer();
 
   //Update pattern timer
-  uint8_t pattern = (now >> 17) % ARRAY_SIZE(patterns); // >> 11 = every 2 seconds, >> 16 = every 64 seconds
+  uint8_t pattern = (now >> 18) % ARRAY_SIZE(patterns); // >> 11 = every 2 seconds, >> 16 = every 64 seconds
 
   fps++;
   EVERY_N_MILLISECONDS(1000) { Serial.printf("  (%d fps, pattern %d, currentPattern %d)\n", fps, pattern, currentPattern); fps = 0;}

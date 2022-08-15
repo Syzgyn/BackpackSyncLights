@@ -8,7 +8,8 @@ void rainbowWithGlitter(CRGB *array, uint32_t now);
 void confetti(CRGB *array, uint32_t now);
 void sinelon(CRGB *array, uint32_t now);
 void bpm(CRGB *array, uint32_t now);
-void plasma(CRGB *array, uint32_t now);
+void waves(CRGB *array, uint32_t now);
+void lava(CRGB *array, uint32_t now);
 
 
 #endif
